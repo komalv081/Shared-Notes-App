@@ -9,6 +9,11 @@ const getFolderForUser = (folderId, userId) =>
     _id: folderId,
     $or: [{ owner: userId }, { members: userId }]
   });
+const getFolderForOwner = (folderId, userId) =>
+  Folder.findOne({
+    _id: folderId,
+    owner: userId
+  });
 
 exports.createFolder = async (req, res) => {
   try {
@@ -184,6 +189,145 @@ exports.getShareFolderLink = async (req, res) => {
       folderId: folder._id,
       shareCode: folder.shareCode,
       shareLink
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updateFolder = async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const { title } = req.body || {};
+    const userId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(folderId)) {
+      return res.status(400).json({ message: "Invalid folder id" });
+    }
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: "Folder title is required" });
+    }
+
+    const folder = await getFolderForOwner(folderId, userId);
+
+    if (!folder) {
+      return res.status(403).json({ message: "Folder not found or no access" });
+    }
+
+    folder.title = title.trim();
+    await folder.save();
+
+    return res.json({
+      message: "Folder updated",
+      folder
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteFolder = async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const userId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(folderId)) {
+      return res.status(400).json({ message: "Invalid folder id" });
+    }
+
+    const folder = await getFolderForOwner(folderId, userId);
+
+    if (!folder) {
+      return res.status(403).json({ message: "Folder not found or no access" });
+    }
+
+    await ChecklistItem.deleteMany({ folderId });
+    await Folder.deleteOne({ _id: folderId });
+
+    return res.json({
+      message: "Folder and its items deleted"
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updateListItem = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { text, isCompleted } = req.body || {};
+    const userId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(itemId)) {
+      return res.status(400).json({ message: "Invalid item id" });
+    }
+
+    const item = await ChecklistItem.findById(itemId);
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    const folder = await getFolderForUser(item.folderId, userId);
+    if (!folder) {
+      return res.status(403).json({ message: "Folder not found or no access" });
+    }
+
+    let isUpdated = false;
+
+    if (typeof text === "string" && text.trim()) {
+      item.text = text.trim();
+      item.lastAction = "edited";
+      isUpdated = true;
+    }
+
+    if (typeof isCompleted === "boolean") {
+      item.isCompleted = isCompleted;
+      item.lastAction = isCompleted ? "completed" : "uncompleted";
+      isUpdated = true;
+    }
+
+    if (!isUpdated) {
+      return res.status(400).json({
+        message: "Send 'text' (non-empty string) or 'isCompleted' (boolean)"
+      });
+    }
+
+    item.lastModifiedBy = userId;
+    await item.save();
+
+    return res.json({
+      message: "Item updated",
+      item
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteListItem = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const userId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(itemId)) {
+      return res.status(400).json({ message: "Invalid item id" });
+    }
+
+    const item = await ChecklistItem.findById(itemId);
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    const folder = await getFolderForUser(item.folderId, userId);
+    if (!folder) {
+      return res.status(403).json({ message: "Folder not found or no access" });
+    }
+
+    await ChecklistItem.deleteOne({ _id: itemId });
+
+    return res.json({
+      message: "Item deleted"
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
