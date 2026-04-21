@@ -74,7 +74,7 @@ Authorization: Bearer <token>
 
 ## API Endpoints
 
-Base URL: `http://localhost:5000`
+Base URL: `https://shared-notes-app-jhy1.onrender.com/`
 
 ### Auth
 
