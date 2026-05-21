@@ -5,6 +5,10 @@ const folderController = require("../controllers/folderController");
 
 const router = express.Router();
 
+// Join shared folder (must be before /:folderId routes)
+router.get("/join/:shareCode", folderController.redirectJoinLink);
+router.post("/join/:shareCode", authMiddleware, folderController.joinFolder);
+
 // Folder routes
 router.get("/", authMiddleware, folderController.getFolders);
 router.post("/", authMiddleware, folderController.createFolder);

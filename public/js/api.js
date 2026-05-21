@@ -68,6 +68,8 @@ export const api = {
   deleteFolder: (folderId) =>
     request(`/folders/${folderId}`, { method: "DELETE" }),
   getShareLink: (folderId) => request(`/folders/${folderId}/share-link`),
+  joinFolder: (shareCode) =>
+    request(`/folders/join/${shareCode}`, { method: "POST" }),
   getItems: (folderId) => request(`/folders/${folderId}/items`),
   createItem: (folderId, text) =>
     request(`/folders/${folderId}/items`, {

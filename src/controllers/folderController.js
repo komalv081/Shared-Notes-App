@@ -166,6 +166,51 @@ exports.getFolderItems = async (req, res) => {
   }
 };
 
+exports.joinFolder = async (req, res) => {
+  try {
+    const { shareCode } = req.params;
+    const userId = req.user.userId;
+
+    if (!shareCode || typeof shareCode !== "string") {
+      return res.status(400).json({ message: "Invalid share code" });
+    }
+
+    const folder = await Folder.findOne({ shareCode: shareCode.trim() });
+
+    if (!folder) {
+      return res.status(404).json({ message: "Folder not found" });
+    }
+
+    const userIdStr = String(userId);
+    const alreadyMember = folder.members.some(
+      (memberId) => String(memberId) === userIdStr
+    );
+
+    if (alreadyMember) {
+      return res.json({
+        message: "You already have access to this folder",
+        folder
+      });
+    }
+
+    folder.members.push(userId);
+    await folder.save();
+
+    return res.json({
+      message: "Joined folder successfully",
+      folder
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.redirectJoinLink = (req, res) => {
+  const { shareCode } = req.params;
+  const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  return res.redirect(`${baseUrl}/?join=${shareCode}`);
+};
+
 exports.getShareFolderLink = async (req, res) => {
   try {
     const { folderId } = req.params;
@@ -182,7 +227,7 @@ exports.getShareFolderLink = async (req, res) => {
     }
 
     const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
-    const shareLink = `${baseUrl}/api/folders/join/${folder.shareCode}`;
+    const shareLink = `${baseUrl}/?join=${folder.shareCode}`;
 
     return res.json({
       message: "Share link generated",

@@ -18,11 +18,7 @@ app.use(express.json({ type: ["application/json", "text/plain"] })); // parse JS
 app.use(express.urlencoded({ extended: true })); // parse x-www-form-urlencoded bodies
 app.use(cors()); // allow cross origin requests
 
-app.use(
-  express.static(path.join(__dirname, "../public"), {
-    index: "index.html"
-  })
-);
+const folderController = require("./controllers/folderController");
 
 app.use("/api", (req, res, next) => {
   if (mongoose.connection.readyState !== 1) {
@@ -34,13 +30,21 @@ app.use("/api", (req, res, next) => {
   return next();
 });
 
+app.get("/api/health", (req, res) => {
+  res.json({ message: "Server running", database: mongoose.connection.readyState === 1 });
+});
+
+app.get("/api/folders/join/:shareCode", folderController.redirectJoinLink);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/folders", folderRoutes);
 
-app.get("/api/health", (req, res) => {
-  res.json({ message: "Server running", database: mongoose.connection.readyState === 1 });
-});
+app.use(
+  express.static(path.join(__dirname, "../public"), {
+    index: "index.html"
+  })
+);
 
 const startServer = async () => {
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;

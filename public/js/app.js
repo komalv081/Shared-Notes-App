@@ -3,6 +3,8 @@ import { toggleTheme } from "./theme.js";
 
 const $ = (id) => document.getElementById(id);
 
+const PENDING_JOIN_KEY = "notes_app_pending_join";
+
 const state = {
   user: null,
   folders: [],
@@ -252,6 +254,7 @@ async function handleLogin(event) {
     updateUserUi();
     showApp();
     await refreshApp();
+    await processPendingJoin();
     showToast("Signed in successfully", "success");
   } catch (err) {
     showToast(err.message, "error");
@@ -434,9 +437,39 @@ async function shareFolder() {
   }
 }
 
+function captureJoinFromUrl() {
+  const code = new URLSearchParams(window.location.search).get("join");
+  if (!code) return;
+
+  sessionStorage.setItem(PENDING_JOIN_KEY, code);
+  const url = new URL(window.location.href);
+  url.searchParams.delete("join");
+  window.history.replaceState({}, "", url.pathname + url.search);
+}
+
+async function processPendingJoin() {
+  const shareCode = sessionStorage.getItem(PENDING_JOIN_KEY);
+  if (!shareCode || !getToken()) return;
+
+  setLoading(true);
+  try {
+    const data = await api.joinFolder(shareCode);
+    sessionStorage.removeItem(PENDING_JOIN_KEY);
+    const folderId = data.folder?._id;
+    await loadFolders(folderId);
+    await loadItems();
+    showToast(data.message || "Joined folder", "success");
+  } catch (err) {
+    showToast(err.message, "error");
+  } finally {
+    setLoading(false);
+  }
+}
+
 function logout() {
   clearToken();
   sessionStorage.removeItem("notes_app_user");
+  sessionStorage.removeItem(PENDING_JOIN_KEY);
   state.user = null;
   state.folders = [];
   state.selectedFolderId = null;
@@ -458,6 +491,7 @@ async function tryRestoreSession() {
     updateUserUi();
     showApp();
     await refreshApp();
+    await processPendingJoin();
   } catch {
     clearToken();
     sessionStorage.removeItem("notes_app_user");
@@ -495,6 +529,7 @@ function bindEvents() {
 }
 
 function init() {
+  captureJoinFromUrl();
   bindEvents();
   showAuth();
   tryRestoreSession();
