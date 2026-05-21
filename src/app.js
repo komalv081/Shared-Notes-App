@@ -76,5 +76,6 @@ const startServer = async () => {
     process.exit(1);
   }
 };
-
+console.log("URI exists:", !!process.env.MONGODB_URI);
+console.log(process.env.MONGODB_URI?.substring(0,40));
 startServer();
