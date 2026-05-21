@@ -50,6 +50,10 @@ APP_BASE_URL=http://localhost:5000
 
 `APP_BASE_URL` is optional and used when generating share links.
 
+`DNS_SERVERS` is optional (default: `8.8.8.8,1.1.1.1`). Used when connecting with `mongodb+srv://` if your local DNS refuses SRV lookups (`querySrv ECONNREFUSED`).
+
+Use either `MONGO_URI` or `MONGODB_URI` in `.env` (both are supported).
+
 ## Installation
 
 ```bash
@@ -59,10 +63,24 @@ npm install
 ## Run Server
 
 ```bash
-node src/app.js
+npm start
 ```
 
 Server starts only after successful MongoDB connection.
+
+## Web UI
+
+A built-in web console is served at [http://localhost:5000](http://localhost:5000) when the server is running.
+
+Features:
+- Dashboard with links to all API sections
+- Authentication (register / login with token storage)
+- Profile, Folders, and Checklist Items pages
+- Buttons wired to every documented API endpoint
+- Light and dark theme (persisted in browser)
+- JSON response panel for each section
+
+Static files live in `public/`.
 
 ## Authentication
 

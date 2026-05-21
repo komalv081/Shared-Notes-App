@@ -1,4 +1,6 @@
+const dns = require("dns");
 const express = require("express");
+const path = require("path");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
@@ -16,11 +18,13 @@ app.use(express.json({ type: ["application/json", "text/plain"] })); // parse JS
 app.use(express.urlencoded({ extended: true })); // parse x-www-form-urlencoded bodies
 app.use(cors()); // allow cross origin requests
 
-app.use((req, res, next) => {
-  if (req.path === "/") {
-    return next();
-  }
+app.use(
+  express.static(path.join(__dirname, "../public"), {
+    index: "index.html"
+  })
+);
 
+app.use("/api", (req, res, next) => {
   if (mongoose.connection.readyState !== 1) {
     return res.status(503).json({
       message: "Database unavailable. Please try again in a moment."
@@ -34,13 +38,32 @@ app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/folders", folderRoutes);
 
-app.get("/", (req, res) => {
-  res.send("Server FIne ✅");
+app.get("/api/health", (req, res) => {
+  res.json({ message: "Server running", database: mongoose.connection.readyState === 1 });
 });
 
 const startServer = async () => {
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+
+  if (!mongoUri) {
+    console.error(
+      "MongoDB connection failed: Set MONGO_URI or MONGODB_URI in your .env file."
+    );
+    process.exit(1);
+  }
+
+  // Some networks refuse SRV lookups to the local DNS; Node then fails with
+  // querySrv ECONNREFUSED even though mongodb+srv:// URIs are valid.
+  if (mongoUri.startsWith("mongodb+srv://")) {
+    const dnsServers = (process.env.DNS_SERVERS || "8.8.8.8,1.1.1.1")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    dns.setServers(dnsServers);
+  }
+
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
+    await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000
     });
     console.log("MongoDB connected ✅");

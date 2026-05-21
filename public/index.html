@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notes App</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script type="module">
+      import { initTheme } from "/js/theme.js";
+      initTheme();
+    </script>
+  </head>
+  <body>
+    <div id="loading-overlay" class="loading-overlay hidden" aria-hidden="true">
+      <div class="spinner" role="status" aria-label="Loading"></div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+
+    <!-- Auth -->
+    <section id="auth-screen" class="auth-screen">
+      <div class="card auth-card">
+        <div class="brand" style="margin-bottom: 1rem">
+          <div class="brand-icon" aria-hidden="true">N</div>
+          <div>
+            <h2>Notes App</h2>
+            <p>Shared checklists for you and your team</p>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab active" data-tab="login" role="tab">
+            Sign in
+          </button>
+          <button type="button" class="tab" data-tab="register" role="tab">
+            Register
+          </button>
+        </div>
+
+        <form id="login-form">
+          <div class="field">
+            <label for="login-email">Email</label>
+            <input
+              id="login-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="login-password">Password</label>
+            <input
+              id="login-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%">
+            Sign in
+          </button>
+        </form>
+
+        <form id="register-form" class="hidden">
+          <div class="field">
+            <label for="register-name">Name</label>
+            <input
+              id="register-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="register-email">Email</label>
+            <input
+              id="register-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="register-password">Password</label>
+            <input
+              id="register-password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="6"
+            />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%">
+            Create account
+          </button>
+        </form>
+
+        <p style="margin-top: 1rem; text-align: center">
+          <button type="button" id="theme-toggle-auth" class="btn btn-ghost">
+            Toggle theme
+          </button>
+        </p>
+      </div>
+    </section>
+
+    <!-- App -->
+    <div id="app-screen" class="app-shell hidden">
+      <header class="top-bar">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">N</div>
+          <div>
+            <h1>Notes App</h1>
+            <p id="user-greeting">Welcome</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span id="user-chip" class="user-chip"></span>
+          <button type="button" id="theme-toggle" class="btn btn-icon" title="Toggle theme">
+            ◐
+          </button>
+          <button type="button" id="logout-btn" class="btn btn-ghost">Sign out</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <input
+              id="new-folder-input"
+              type="text"
+              placeholder="New folder name"
+              aria-label="New folder name"
+            />
+            <button type="button" id="new-folder-btn" class="btn btn-primary">Add</button>
+          </div>
+          <ul id="folder-list" class="folder-list" aria-label="Folders"></ul>
+        </aside>
+
+        <main class="main-panel">
+          <div id="no-folder-selected" class="empty-state card">
+            <p>Select a folder or create one to start adding checklist items.</p>
+          </div>
+
+          <div id="folder-panel" class="hidden" style="display: flex; flex-direction: column; gap: 1rem; flex: 1; min-height: 0">
+            <div class="panel-header">
+              <div>
+                <h2 id="folder-title">Folder</h2>
+                <p id="folder-meta"></p>
+              </div>
+              <div class="panel-actions">
+                <button type="button" id="rename-folder-btn" class="btn btn-ghost">
+                  Rename
+                </button>
+                <button type="button" id="share-folder-btn" class="btn btn-ghost">
+                  Share link
+                </button>
+                <button type="button" id="delete-folder-btn" class="btn btn-danger">
+                  Delete folder
+                </button>
+              </div>
+            </div>
+
+            <div class="card add-item-row">
+              <input
+                id="new-item-input"
+                type="text"
+                placeholder="Add a checklist item…"
+                aria-label="New checklist item"
+              />
+              <button type="button" id="new-item-btn" class="btn btn-primary">Add</button>
+            </div>
+
+            <div class="card" style="flex: 1; min-height: 0; overflow: auto">
+              <ul id="item-list" class="item-list" aria-label="Checklist items"></ul>
+              <div id="empty-items" class="empty-state hidden">
+                <p>No items yet. Add your first task above.</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
