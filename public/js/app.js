@@ -1,6 +1,15 @@
 import { api, getToken, setToken, clearToken } from "./api.js";
 import { toggleTheme } from "./theme.js";
 
+let socketApi = null;
+
+async function getSocketApi() {
+  if (!socketApi) {
+    socketApi = await import("./socket.js");
+  }
+  return socketApi;
+}
+
 const $ = (id) => document.getElementById(id);
 
 const PENDING_JOIN_KEY = "notes_app_pending_join";
@@ -53,7 +62,7 @@ function showApp() {
 }
 
 function switchAuthTab(tab) {
-  document.querySelectorAll(".tab").forEach((el) => {
+  document.querySelectorAll(".tabs .tab").forEach((el) => {
     el.classList.toggle("active", el.dataset.tab === tab);
   });
   $("login-form").classList.toggle("hidden", tab !== "login");
@@ -135,9 +144,21 @@ function renderItems() {
       toggleItemComplete(item._id, checkbox.checked)
     );
 
+    const content = document.createElement("div");
+    content.className = "item-content";
+
     const text = document.createElement("span");
     text.className = "item-text";
     text.textContent = item.text;
+    content.appendChild(text);
+
+    const meta = getActivityLabel(item);
+    if (meta) {
+      const metaEl = document.createElement("span");
+      metaEl.className = "item-meta";
+      metaEl.textContent = meta;
+      content.appendChild(metaEl);
+    }
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
@@ -155,7 +176,7 @@ function renderItems() {
     deleteBtn.addEventListener("click", () => deleteItem(item._id));
 
     actions.append(editBtn, deleteBtn);
-    li.append(checkbox, text, actions);
+    li.append(checkbox, content, actions);
     list.appendChild(li);
   }
 }
@@ -166,6 +187,143 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function userNameFromRef(ref) {
+  if (!ref) return null;
+  if (typeof ref === "object" && ref.name) return ref.name;
+  return null;
+}
+
+function getActivityLabel(item) {
+  const creator = userNameFromRef(item.createdBy);
+  const editor = userNameFromRef(item.lastModifiedBy);
+
+  if (item.lastAction === "created" || !item.lastAction) {
+    return creator ? `Created by: ${creator}` : "";
+  }
+
+  const labels = {
+    edited: "Last edited by",
+    completed: "Completed by",
+    uncompleted: "Uncompleted by"
+  };
+  const prefix = labels[item.lastAction] || "Updated by";
+  const name = editor || creator;
+  return name ? `${prefix}: ${name}` : "";
+}
+
+function isCurrentUser(userRef) {
+  if (!state.user?.id || !userRef?.userId) return false;
+  return String(state.user.id) === String(userRef.userId);
+}
+
+function upsertItem(note) {
+  if (!note?._id) return;
+  const idx = state.items.findIndex((i) => String(i._id) === String(note._id));
+  if (idx >= 0) {
+    state.items[idx] = note;
+  } else {
+    state.items.push(note);
+  }
+  state.items.sort(
+    (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
+  );
+}
+
+function removeItemById(noteId) {
+  state.items = state.items.filter((i) => String(i._id) !== String(noteId));
+}
+
+function handleRealtimeNoteCreated({ note, folderId, createdBy }) {
+  console.log("📝 handleRealtimeNoteCreated called with:", { note, folderId, createdBy });
+  if (!note || String(folderId) !== String(state.selectedFolderId)) {
+    console.warn("⚠️ Ignoring noteCreated - folder mismatch or invalid data");
+    return;
+  }
+  console.log("✅ Adding note to state");
+  upsertItem(note);
+  renderItems();
+  if (!isCurrentUser(createdBy)) {
+    showToast(`Created by ${createdBy?.name || "Someone"}`, "info");
+  }
+}
+
+function handleRealtimeNoteUpdated({ note, folderId, updatedBy }) {
+  console.log("📝 handleRealtimeNoteUpdated called with:", { note, folderId, updatedBy });
+  if (!note || String(folderId) !== String(state.selectedFolderId)) {
+    console.warn("⚠️ Ignoring noteUpdated - folder mismatch or invalid data");
+    return;
+  }
+  console.log("✅ Updating note in state");
+  upsertItem(note);
+  renderItems();
+  if (!isCurrentUser(updatedBy)) {
+    const action =
+      note.lastAction === "completed"
+        ? "Completed"
+        : note.lastAction === "uncompleted"
+          ? "Uncompleted"
+          : "Edited";
+    showToast(`${action} by ${updatedBy?.name || "Someone"}`, "info");
+  }
+}
+
+function handleRealtimeNoteDeleted({ noteId, folderId, deletedBy }) {
+  console.log("📝 handleRealtimeNoteDeleted called with:", { noteId, folderId, deletedBy });
+  if (!noteId || String(folderId) !== String(state.selectedFolderId)) {
+    console.warn("⚠️ Ignoring noteDeleted - folder mismatch or invalid data");
+    return;
+  }
+  console.log("✅ Removing note from state");
+  removeItemById(noteId);
+  renderItems();
+  if (!isCurrentUser(deletedBy)) {
+    showToast(`Deleted by ${deletedBy?.name || "Someone"}`, "info");
+  }
+}
+
+function setupRealtimeSync(mod) {
+  console.log("🔧 Setting up realtime sync handlers");
+  mod.clearNoteHandlers();
+  mod.onNoteCreated(handleRealtimeNoteCreated);
+  mod.onNoteUpdated(handleRealtimeNoteUpdated);
+  mod.onNoteDeleted(handleRealtimeNoteDeleted);
+  console.log("✅ Realtime sync handlers registered");
+}
+
+async function startRealtimeConnection() {
+  try {
+    console.log("🚀 Starting realtime connection...");
+    const mod = await getSocketApi();
+    console.log("📦 Socket API module loaded");
+    
+    await mod.connectSocket();
+    console.log("✅ Socket connected");
+    
+    setupRealtimeSync(mod);
+    
+    if (state.selectedFolderId) {
+      console.log("📂 Joining folder room:", state.selectedFolderId);
+      mod.joinFolderRoom(state.selectedFolderId);
+    } else {
+      console.log("ℹ️ No folder selected yet - will join when folder is selected");
+    }
+  } catch (err) {
+    console.error("❌ Realtime sync unavailable:", err.message);
+  }
+}
+
+async function stopRealtimeConnection() {
+  try {
+    const mod = socketApi || (await getSocketApi().catch(() => null));
+    if (mod) {
+      mod.disconnectSocket();
+      mod.clearNoteHandlers();
+    }
+  } catch {
+    // ignore cleanup errors
+  }
 }
 
 function persistUser() {
@@ -217,8 +375,16 @@ async function loadItems() {
 }
 
 async function selectFolder(folderId) {
+  console.log("📂 Selecting folder:", folderId);
   state.selectedFolderId = folderId;
   renderFolders();
+  try {
+    const mod = await getSocketApi();
+    console.log("📨 Joining folder room via socket...");
+    mod.joinFolderRoom(folderId);
+  } catch (err) {
+    console.warn("⚠️ Could not join folder room:", err.message);
+  }
   setLoading(true);
   try {
     await loadItems();
@@ -229,11 +395,27 @@ async function selectFolder(folderId) {
   }
 }
 
+async function joinCurrentFolderRoom() {
+  if (!state.selectedFolderId) {
+    console.log("ℹ️ No selected folder to join");
+    return;
+  }
+
+  try {
+    const mod = await getSocketApi();
+    console.log("📨 Joining current folder room after load:", state.selectedFolderId);
+    mod.joinFolderRoom(state.selectedFolderId);
+  } catch (err) {
+    console.warn("⚠️ Failed to join current folder room:", err.message);
+  }
+}
+
 async function refreshApp() {
   setLoading(true);
   try {
     await loadFolders();
     await loadItems();
+    await joinCurrentFolderRoom();
   } finally {
     setLoading(false);
   }
@@ -253,6 +435,7 @@ async function handleLogin(event) {
     persistUser();
     updateUserUi();
     showApp();
+    await startRealtimeConnection();
     await refreshApp();
     await processPendingJoin();
     showToast("Signed in successfully", "success");
@@ -319,9 +502,12 @@ async function createItem() {
 
   setLoading(true);
   try {
-    await api.createItem(state.selectedFolderId, text);
+    const data = await api.createItem(state.selectedFolderId, text);
     input.value = "";
-    await loadItems();
+    for (const note of data.items || []) {
+      upsertItem(note);
+    }
+    renderItems();
     showToast("Item added", "success");
   } catch (err) {
     showToast(err.message, "error");
@@ -332,9 +518,8 @@ async function createItem() {
 
 async function toggleItemComplete(itemId, isCompleted) {
   try {
-    await api.updateItem(itemId, { isCompleted });
-    const item = state.items.find((i) => i._id === itemId);
-    if (item) item.isCompleted = isCompleted;
+    const data = await api.updateItem(itemId, { isCompleted });
+    if (data.item) upsertItem(data.item);
     renderItems();
   } catch (err) {
     showToast(err.message, "error");
@@ -350,8 +535,9 @@ async function editItem(item) {
 
   setLoading(true);
   try {
-    await api.updateItem(item._id, { text });
-    await loadItems();
+    const data = await api.updateItem(item._id, { text });
+    if (data.item) upsertItem(data.item);
+    renderItems();
     showToast("Item updated", "success");
   } catch (err) {
     showToast(err.message, "error");
@@ -366,7 +552,8 @@ async function deleteItem(itemId) {
   setLoading(true);
   try {
     await api.deleteItem(itemId);
-    await loadItems();
+    removeItemById(itemId);
+    renderItems();
     showToast("Item deleted", "success");
   } catch (err) {
     showToast(err.message, "error");
@@ -458,6 +645,7 @@ async function processPendingJoin() {
     const folderId = data.folder?._id;
     await loadFolders(folderId);
     await loadItems();
+    await joinCurrentFolderRoom();
     showToast(data.message || "Joined folder", "success");
   } catch (err) {
     showToast(err.message, "error");
@@ -466,7 +654,8 @@ async function processPendingJoin() {
   }
 }
 
-function logout() {
+async function logout() {
+  await stopRealtimeConnection();
   clearToken();
   sessionStorage.removeItem("notes_app_user");
   sessionStorage.removeItem(PENDING_JOIN_KEY);
@@ -490,11 +679,13 @@ async function tryRestoreSession() {
     };
     updateUserUi();
     showApp();
+    await startRealtimeConnection();
     await refreshApp();
     await processPendingJoin();
   } catch {
     clearToken();
     sessionStorage.removeItem("notes_app_user");
+    await stopRealtimeConnection();
     showAuth();
   } finally {
     setLoading(false);
@@ -502,7 +693,7 @@ async function tryRestoreSession() {
 }
 
 function bindEvents() {
-  document.querySelectorAll(".tab").forEach((tab) => {
+  document.querySelectorAll(".tabs .tab").forEach((tab) => {
     tab.addEventListener("click", () => switchAuthTab(tab.dataset.tab));
   });
 

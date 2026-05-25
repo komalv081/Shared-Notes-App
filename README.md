@@ -35,6 +35,9 @@ src/
     authRoutes.js
     userRoutes.js
     folderRoutes.js
+  sockets/
+    socketManager.js
+    noteEmitter.js
 ```
 
 ## Environment Variables
@@ -46,9 +49,12 @@ PORT=5000
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
 APP_BASE_URL=http://localhost:5000
+CLIENT_ORIGIN=http://localhost:5000
 ```
 
 `APP_BASE_URL` is optional and used when generating share links.
+
+`CLIENT_ORIGIN` is optional and used for Socket.IO CORS (set to your Render URL in production).
 
 `DNS_SERVERS` is optional (default: `8.8.8.8,1.1.1.1`). Used when connecting with `mongodb+srv://` if your local DNS refuses SRV lookups (`querySrv ECONNREFUSED`).
 
@@ -70,17 +76,26 @@ Server starts only after successful MongoDB connection.
 
 ## Web UI
 
-A built-in web console is served at [http://localhost:5000](http://localhost:5000) when the server is running.
+A built-in web app is served at [http://localhost:5000](http://localhost:5000) when the server is running.
 
 Features:
-- Dashboard with links to all API sections
 - Authentication (register / login with token storage)
-- Profile, Folders, and Checklist Items pages
-- Buttons wired to every documented API endpoint
+- Shared folders and checklist items
+- Real-time note sync via Socket.IO (no page refresh)
+- Activity labels (Created by / Edited by / Deleted by)
 - Light and dark theme (persisted in browser)
-- JSON response panel for each section
 
 Static files live in `public/`.
+
+## Real-time (Socket.IO)
+
+REST APIs remain the source of truth. After a successful database write, the server emits:
+
+- `noteCreated` — new checklist item with `createdBy` user info
+- `noteUpdated` — updated item with `updatedBy` user info
+- `noteDeleted` — deleted item id with `deletedBy` user info
+
+Clients join a folder room with `joinFolder` after selecting a folder. All connected members in that folder receive updates instantly.
 
 ## Authentication
 

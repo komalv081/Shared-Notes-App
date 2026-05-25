@@ -311,8 +311,20 @@ textarea {
   color: var(--text-muted);
 }
 
+.item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
 .item-text {
   word-break: break-word;
+}
+
+.item-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .item-actions {

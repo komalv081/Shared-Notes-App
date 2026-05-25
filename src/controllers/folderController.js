@@ -2,6 +2,11 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 const Folder = require("../models/folder");
 const ChecklistItem = require("../models/checklistItem");
+const {
+  emitNoteCreated,
+  emitNoteUpdated,
+  emitNoteDeleted
+} = require("../sockets/noteEmitter");
 
 const makeShareCode = () => crypto.randomBytes(16).toString("hex");
 const getFolderForUser = (folderId, userId) =>
@@ -103,12 +108,18 @@ exports.createListItem = async (req, res) => {
 
     const createdItems = await ChecklistItem.insertMany(docsToCreate);
 
+    for (const item of createdItems) {
+      console.log(`📝 Created item: ${item._id}, emitting noteCreated event`);
+      await emitNoteCreated(folderId, item, userId);
+    }
+
     return res.status(201).json({
       message: `${createdItems.length} list item(s) created`,
       count: createdItems.length,
       items: createdItems
     });
   } catch (error) {
+    console.error("❌ Error creating list item:", error.message);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -341,11 +352,15 @@ exports.updateListItem = async (req, res) => {
     item.lastModifiedBy = userId;
     await item.save();
 
+    console.log(`📝 Updated item: ${item._id}, emitting noteUpdated event`);
+    await emitNoteUpdated(item.folderId, item, userId);
+
     return res.json({
       message: "Item updated",
       item
     });
   } catch (error) {
+    console.error("❌ Error updating list item:", error.message);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -369,12 +384,17 @@ exports.deleteListItem = async (req, res) => {
       return res.status(403).json({ message: "Folder not found or no access" });
     }
 
+    const folderId = item.folderId;
     await ChecklistItem.deleteOne({ _id: itemId });
+
+    console.log(`📝 Deleted item: ${itemId}, emitting noteDeleted event`);
+    await emitNoteDeleted(folderId, itemId, userId);
 
     return res.json({
       message: "Item deleted"
     });
   } catch (error) {
+    console.error("❌ Error deleting list item:", error.message);
     return res.status(500).json({ error: error.message });
   }
 };
